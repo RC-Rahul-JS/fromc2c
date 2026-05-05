@@ -30,9 +30,37 @@ const Dashboard = ({ onNavigate }) => {
           className="group bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-blue-900/5 border border-slate-100 hover:border-blue-600 transition-all flex flex-col items-center text-center text-left"
         >
           <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform">📋</div>
-          <h2 className="text-2xl font-black text-slate-800 mb-2">Admin Dashboard</h2>
+          <h2 className="text-2xl font-black text-slate-800 mb-2">Doctor List</h2>
           <p className="text-sm font-bold text-slate-400">Directly access the list of submitted forms for review and approval.</p>
           <div className="mt-8 px-8 py-3 bg-slate-50 text-blue-600 rounded-xl text-xs font-black uppercase tracking-widest group-hover:bg-blue-600 group-hover:text-white transition-colors w-full">
+            View List →
+          </div>
+        </button>
+
+        {/* Medical Form Card */}
+        <button 
+          type="button"
+          onClick={() => onNavigate('medical-form')}
+          className="group bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-blue-900/5 border border-slate-100 hover:border-green-600 transition-all flex flex-col items-center text-center text-left"
+        >
+          <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform">🏥</div>
+          <h2 className="text-2xl font-black text-slate-800 mb-2">Medical Onboarding</h2>
+          <p className="text-sm font-bold text-slate-400">Register a new medical store or pharmacy with an approved doctor.</p>
+          <div className="mt-8 px-8 py-3 bg-slate-50 text-green-600 rounded-xl text-xs font-black uppercase tracking-widest group-hover:bg-green-600 group-hover:text-white transition-colors w-full">
+            Fill Form →
+          </div>
+        </button>
+
+        {/* Medical List Card */}
+        <button 
+          type="button"
+          onClick={() => onNavigate('medical-list')}
+          className="group bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-blue-900/5 border border-slate-100 hover:border-green-600 transition-all flex flex-col items-center text-center text-left"
+        >
+          <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform">🏥</div>
+          <h2 className="text-2xl font-black text-slate-800 mb-2">Medical List</h2>
+          <p className="text-sm font-bold text-slate-400">Review and approve submitted medical stores and pharmacies.</p>
+          <div className="mt-8 px-8 py-3 bg-slate-50 text-green-600 rounded-xl text-xs font-black uppercase tracking-widest group-hover:bg-green-600 group-hover:text-white transition-colors w-full">
             View List →
           </div>
         </button>

@@ -50,10 +50,11 @@ const List = ({ submissions, onBack, onAction }) => {
 
   const [localSubmissions, setLocalSubmissions] = useState([]);
   const [errorInfo, setErrorInfo] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   // Fetch real data from API
   React.useEffect(() => {
-    fetch('https://2eba-2409-4081-9095-df55-2598-23b6-86dd-5733.ngrok-free.app/c2c_app/doctor/requests', {
+    fetch('/api/c2c_app/doctor/requests', {
       headers: {
         'ngrok-skip-browser-warning': 'true'
       }
@@ -115,10 +116,12 @@ const List = ({ submissions, onBack, onAction }) => {
         }));
         
         setLocalSubmissions(mappedList);
+        setIsLoading(false);
       })
       .catch(err => {
         console.error("Error fetching requests:", err);
         setErrorInfo("Fetch failed. Is the backend running and allowing CORS? Error: " + err.message);
+        setIsLoading(false);
       });
   }, []);
 
@@ -126,7 +129,7 @@ const List = ({ submissions, onBack, onAction }) => {
     const payloadStatus = actionType.toLowerCase();
 
     try {
-      const response = await fetch(`https://2eba-2409-4081-9095-df55-2598-23b6-86dd-5733.ngrok-free.app/c2c_app/doctor/review/${id}`, {
+      const response = await fetch(`/api/c2c_app/doctor/review/${id}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -160,12 +163,15 @@ const List = ({ submissions, onBack, onAction }) => {
     }
   };
 
-  const filteredSubmissions = localSubmissions.filter(sub => {
-    const matchesSearch = sub.onboarding?.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sub.onboarding?.phone?.includes(searchQuery);
-    const matchesStatus = statusFilter === 'All' || sub.status?.toLowerCase() === statusFilter.toLowerCase();
-    return matchesSearch && matchesStatus;
-  });
+  const filteredSubmissions = React.useMemo(() => {
+    return localSubmissions.filter(sub => {
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = sub.onboarding?.fullName?.toLowerCase().includes(searchLower) ||
+        sub.onboarding?.phone?.includes(searchQuery);
+      const matchesStatus = statusFilter === 'All' || sub.status?.toLowerCase() === statusFilter.toLowerCase();
+      return matchesSearch && matchesStatus;
+    });
+  }, [localSubmissions, searchQuery, statusFilter]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 relative">
@@ -188,11 +194,10 @@ const List = ({ submissions, onBack, onAction }) => {
         {selectedForm ? '← Back to List' : '← Dashboard'}
       </button>
 
-      {/* Care2Connect Header Theme */}
       <div className="w-full bg-gradient-to-r from-[#0f172a] via-[#1e3a8a] to-[#3b82f6] pt-12 pb-24 px-6 text-center text-white">
         <h1 className="text-3xl font-black italic tracking-tighter uppercase">Care2Connect</h1>
         <p className="text-[10px] font-bold uppercase opacity-60 tracking-[0.3em] mt-2">
-          {selectedForm ? 'Applicant Details' : 'Admin Approval Dashboard'}
+          {selectedForm ? 'Applicant Details' : 'Doctor List'}
         </p>
       </div>
 
@@ -234,22 +239,53 @@ const List = ({ submissions, onBack, onAction }) => {
                 </div>
               </div>
 
-              {/* Horizontal List */}
+              {/* Grid List with Headers */}
               <div className="border border-slate-200 rounded-3xl overflow-hidden mt-8">
-                {filteredSubmissions.length > 0 ? filteredSubmissions.map((sub) => (
+                {/* Headers */}
+                <div className="hidden md:grid grid-cols-12 gap-4 py-4 px-6 bg-slate-100 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-widest items-center">
+                  <div className="col-span-1">ID</div>
+                  <div className="col-span-3">Doctor Name</div>
+                  <div className="col-span-2">Specialization</div>
+                  <div className="col-span-2">Phone</div>
+                  <div className="col-span-3">City</div>
+                  <div className="col-span-1 text-center">Status</div>
+                </div>
+
+                {isLoading ? (
+                  <div className="text-center py-16 bg-slate-50">
+                    <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-xs font-black uppercase text-slate-500 tracking-widest">Loading Data...</p>
+                  </div>
+                ) : filteredSubmissions.length > 0 ? filteredSubmissions.map((sub) => (
                   <div
                     key={sub.id}
                     onClick={() => setSelectedForm(sub)}
-                    className="flex items-center justify-between py-3 px-4 border-b border-slate-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-all group gap-4"
+                    className="grid grid-cols-1 md:grid-cols-12 gap-4 py-4 px-6 border-b border-slate-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-all items-center group"
                   >
-                    <div className="flex items-center gap-2 md:gap-4 flex-1 overflow-hidden">
-                      <span className="hidden md:block text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[60px]">{sub.id}</span>
-                      <h3 className="text-sm font-black text-blue-900 group-hover:text-blue-600 transition-colors whitespace-nowrap truncate">{sub.onboarding?.fullName || 'Unknown Doctor'}</h3>
-                      <p className="hidden md:flex text-xs font-bold text-slate-600 items-center gap-1 whitespace-nowrap">📞 {sub.onboarding?.phone || 'N/A'}</p>
-                      <p className="text-xs font-bold text-slate-600 flex items-center gap-1 truncate flex-1">📍 {sub.onboarding?.clinicLocation || 'N/A'}</p>
+                    <div className="hidden md:block col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">{sub.id}</div>
+                    
+                    <div className="col-span-1 md:col-span-3 flex flex-col justify-center">
+                      <span className="md:hidden text-[9px] font-black uppercase text-slate-400 mb-1">Doctor Name</span>
+                      <h3 className="text-sm font-black text-blue-900 group-hover:text-blue-600 transition-colors truncate">{sub.onboarding?.fullName || 'Unknown'}</h3>
                     </div>
-                    <div className="flex items-center">
-                      <span className={`text-[9px] px-2 py-0.5 rounded font-black uppercase tracking-wider whitespace-nowrap shadow-sm ${sub.status?.toLowerCase() === 'approved' ? 'bg-green-600 text-white' :
+                    
+                    <div className="col-span-1 md:col-span-2 flex flex-col justify-center">
+                      <span className="md:hidden text-[9px] font-black uppercase text-slate-400 mb-1">Specialization</span>
+                      <p className="text-xs font-bold text-slate-600 truncate">{sub.onboarding?.specialization || 'General'}</p>
+                    </div>
+                    
+                    <div className="col-span-1 md:col-span-2 flex flex-col justify-center">
+                      <span className="md:hidden text-[9px] font-black uppercase text-slate-400 mb-1">Phone</span>
+                      <p className="text-xs font-bold text-slate-600 truncate">📞 {sub.onboarding?.phone || 'N/A'}</p>
+                    </div>
+                    
+                    <div className="col-span-1 md:col-span-3 flex flex-col justify-center">
+                      <span className="md:hidden text-[9px] font-black uppercase text-slate-400 mb-1">City</span>
+                      <p className="text-xs font-bold text-slate-600 truncate">📍 {sub.clinic?.clinicCity || 'N/A'}</p>
+                    </div>
+                    
+                    <div className="col-span-1 flex items-center md:justify-center mt-2 md:mt-0">
+                      <span className={`text-[9px] px-2 py-1 rounded font-black uppercase tracking-wider whitespace-nowrap shadow-sm ${sub.status?.toLowerCase() === 'approved' ? 'bg-green-600 text-white' :
                           sub.status?.toLowerCase() === 'rejected' ? 'bg-red-600 text-white' :
                             'bg-amber-500 text-white'
                         }`}>

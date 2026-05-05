@@ -6,7 +6,8 @@ const apiClient = axios.create({
   // baseURL: 'http://127.0.0.1:5000',
   // baseURL: 'https://0f8d020f325d.ngrok-free.app', 
   // baseURL: 'https://api.care2connect.in'
-  baseURL: 'https://25c8-2405-201-3001-983c-8a9-c4bd-d89c-5de9.ngrok-free.app'
+  // baseURL: 'https://2522-2405-201-3001-983c-790d-6aef-2ae3-e606.ngrok-free.app'
+  baseURL: '/api' // Using vite proxy to avoid CORS
 });
  // or sessionStorage.getItem('token')
 

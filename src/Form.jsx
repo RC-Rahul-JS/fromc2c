@@ -83,7 +83,7 @@ const Form = ({ onSubmitSuccess, onBack }) => {
     };
 
     try {
-      const response = await fetch("https://2eba-2409-4081-9095-df55-2598-23b6-86dd-5733.ngrok-free.app/c2c_app/doctor/request", {
+      const response = await fetch("/api/c2c_app/doctor/request", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
