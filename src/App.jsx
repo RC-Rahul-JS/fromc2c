@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './Dashboard';
 import Form from './Form';
 import List from './List';
@@ -6,17 +7,11 @@ import MedicalForm from './MedicalForm';
 import MedicalList from './MedicalList';
 
 const App = () => {
-  const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'form', 'list', 'medical-form', 'medical-list'
   const [allSubmissions, setAllSubmissions] = useState([]);
   const [medicalSubmissions, setMedicalSubmissions] = useState([]);
 
-  const handleNavigate = (view) => {
-    setCurrentView(view);
-  };
-
   const handleFormSubmit = (finalData) => {
     setAllSubmissions(prev => [...prev, finalData]);
-    setCurrentView('dashboard');
   };
 
   const handleListAction = (id, actionType) => {
@@ -25,7 +20,6 @@ const App = () => {
 
   const handleMedicalFormSubmit = (finalData) => {
     setMedicalSubmissions(prev => [...prev, finalData]);
-    setCurrentView('dashboard');
   };
 
   const handleMedicalListAction = (id, actionType) => {
@@ -33,39 +27,42 @@ const App = () => {
   };
 
   return (
-    <>
-      {currentView === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
-      
-      {currentView === 'form' && (
-        <Form 
-          onSubmitSuccess={handleFormSubmit} 
-          onBack={() => handleNavigate('dashboard')} 
-        />
-      )}
-      
-      {currentView === 'list' && (
-        <List 
-          submissions={allSubmissions} 
-          onBack={() => handleNavigate('dashboard')} 
-          onAction={handleListAction}
-        />
-      )}
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashbord" element={<Navigate to="/dashboard" replace />} />
+        
+        <Route path="/form" element={
+          <Form 
+            onSubmitSuccess={handleFormSubmit} 
+          />
+        } />
+        
+        <Route path="/list" element={
+          <List 
+            submissions={allSubmissions} 
+            onAction={handleListAction}
+          />
+        } />
 
-      {currentView === 'medical-form' && (
-        <MedicalForm 
-          onSubmitSuccess={handleMedicalFormSubmit} 
-          onBack={() => handleNavigate('dashboard')} 
-        />
-      )}
+        <Route path="/medical-form" element={
+          <MedicalForm 
+            onSubmitSuccess={handleMedicalFormSubmit} 
+          />
+        } />
 
-      {currentView === 'medical-list' && (
-        <MedicalList 
-          submissions={medicalSubmissions} 
-          onBack={() => handleNavigate('dashboard')} 
-          onAction={handleMedicalListAction}
-        />
-      )}
-    </>
+        <Route path="/medical-list" element={
+          <MedicalList 
+            submissions={medicalSubmissions} 
+            onAction={handleMedicalListAction}
+          />
+        } />
+
+        {/* Catch-all route -> Redirects to Dashboard */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 };
 

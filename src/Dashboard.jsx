@@ -1,6 +1,8 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const Dashboard = ({ onNavigate }) => {
+const Dashboard = () => {
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 flex flex-col items-center justify-center p-6">
       <div className="text-center mb-12">
@@ -12,7 +14,7 @@ const Dashboard = ({ onNavigate }) => {
         {/* Fill Form Card */}
         <button 
           type="button"
-          onClick={() => onNavigate('form')}
+          onClick={() => navigate('/form')}
           className="group bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-blue-900/5 border border-slate-100 hover:border-blue-600 transition-all flex flex-col items-center text-center text-left"
         >
           <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform">📝</div>
@@ -26,7 +28,7 @@ const Dashboard = ({ onNavigate }) => {
         {/* List Access Card */}
         <button 
           type="button"
-          onClick={() => onNavigate('list')}
+          onClick={() => navigate('/list')}
           className="group bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-blue-900/5 border border-slate-100 hover:border-blue-600 transition-all flex flex-col items-center text-center text-left"
         >
           <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform">📋</div>
@@ -40,7 +42,7 @@ const Dashboard = ({ onNavigate }) => {
         {/* Medical Form Card */}
         <button 
           type="button"
-          onClick={() => onNavigate('medical-form')}
+          onClick={() => navigate('/medical-form')}
           className="group bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-blue-900/5 border border-slate-100 hover:border-green-600 transition-all flex flex-col items-center text-center text-left"
         >
           <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform">🏥</div>
@@ -54,7 +56,7 @@ const Dashboard = ({ onNavigate }) => {
         {/* Medical List Card */}
         <button 
           type="button"
-          onClick={() => onNavigate('medical-list')}
+          onClick={() => navigate('/medical-list')}
           className="group bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-blue-900/5 border border-slate-100 hover:border-green-600 transition-all flex flex-col items-center text-center text-left"
         >
           <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform">🏥</div>

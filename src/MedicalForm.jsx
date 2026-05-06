@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const MedicalForm = ({ onSubmitSuccess, onBack }) => {
+const MedicalForm = ({ onSubmitSuccess }) => {
+  const navigate = useNavigate();
+  const onBack = () => navigate('/dashboard');
   const [doctors, setDoctors] = useState([]);
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
@@ -33,7 +36,7 @@ const MedicalForm = ({ onSubmitSuccess, onBack }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch('/api/c2c_app/doctor/requests', {
+    fetch('/api/c2c_app/doctors', {
       headers: {
         'ngrok-skip-browser-warning': 'true'
       }
@@ -56,15 +59,15 @@ const MedicalForm = ({ onSubmitSuccess, onBack }) => {
         const mappedList = list.map(item => ({
           id: item.doctor_id || item.id || item._id,
           status: item.status || 'Pending',
-          fullName: item.fullName || item.name,
+          fullName: item.Name || item.name,
           phone: item.phone,
           specialization: item.specialization || item.speciality,
           clinicLocation: item.clinicLocation || item.address,
         }));
 
         // Filter only approved doctors
-        const approvedDoctors = mappedList.filter(doc => doc.status?.toLowerCase() === 'approved');
-        setDoctors(approvedDoctors);
+        // const approvedDoctors = mappedList.filter(doc => doc.status?.toLowerCase() === 'approved');
+        setDoctors(mappedList);
         setIsLoadingDoctors(false);
       })
       .catch(err => {

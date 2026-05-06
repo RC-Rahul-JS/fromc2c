@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const MedicalList = ({ submissions, onBack, onAction }) => {
+const MedicalList = ({ submissions, onAction }) => {
+  const navigate = useNavigate();
+  const onBack = () => navigate('/dashboard');
   const [selectedForm, setSelectedForm] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');

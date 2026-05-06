@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const List = ({ submissions, onBack, onAction }) => {
+const List = ({ submissions, onAction }) => {
+  const navigate = useNavigate();
+  const onBack = () => navigate('/dashboard');
   const [selectedForm, setSelectedForm] = useState(null);
   const [fullImage, setFullImage] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -243,9 +246,8 @@ const List = ({ submissions, onBack, onAction }) => {
               <div className="border border-slate-200 rounded-3xl overflow-hidden mt-8">
                 {/* Headers */}
                 <div className="hidden md:grid grid-cols-12 gap-4 py-4 px-6 bg-slate-100 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-widest items-center">
-                  <div className="col-span-1">ID</div>
                   <div className="col-span-3">Doctor Name</div>
-                  <div className="col-span-2">Specialization</div>
+                  <div className="col-span-3">Specialization</div>
                   <div className="col-span-2">Phone</div>
                   <div className="col-span-3">City</div>
                   <div className="col-span-1 text-center">Status</div>
@@ -262,14 +264,12 @@ const List = ({ submissions, onBack, onAction }) => {
                     onClick={() => setSelectedForm(sub)}
                     className="grid grid-cols-1 md:grid-cols-12 gap-4 py-4 px-6 border-b border-slate-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-all items-center group"
                   >
-                    <div className="hidden md:block col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">{sub.id}</div>
-                    
                     <div className="col-span-1 md:col-span-3 flex flex-col justify-center">
                       <span className="md:hidden text-[9px] font-black uppercase text-slate-400 mb-1">Doctor Name</span>
                       <h3 className="text-sm font-black text-blue-900 group-hover:text-blue-600 transition-colors truncate">{sub.onboarding?.fullName || 'Unknown'}</h3>
                     </div>
                     
-                    <div className="col-span-1 md:col-span-2 flex flex-col justify-center">
+                    <div className="col-span-1 md:col-span-3 flex flex-col justify-center">
                       <span className="md:hidden text-[9px] font-black uppercase text-slate-400 mb-1">Specialization</span>
                       <p className="text-xs font-bold text-slate-600 truncate">{sub.onboarding?.specialization || 'General'}</p>
                     </div>
@@ -281,7 +281,7 @@ const List = ({ submissions, onBack, onAction }) => {
                     
                     <div className="col-span-1 md:col-span-3 flex flex-col justify-center">
                       <span className="md:hidden text-[9px] font-black uppercase text-slate-400 mb-1">City</span>
-                      <p className="text-xs font-bold text-slate-600 truncate">📍 {sub.clinic?.clinicCity || 'N/A'}</p>
+                      <p className="text-xs font-bold text-slate-600 truncate">📍 {sub.onboarding?.state || 'N/A'}</p>
                     </div>
                     
                     <div className="col-span-1 flex items-center md:justify-center mt-2 md:mt-0">

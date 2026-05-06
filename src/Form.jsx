@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import jsonfile from '../1.json';
 
-const Form = ({ onSubmitSuccess, onBack }) => {
+const Form = ({ onSubmitSuccess }) => {
+  const navigate = useNavigate();
+  const onBack = () => navigate('/dashboard');
   // --- STATE: STEP TRACKING ---
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -26,6 +29,8 @@ const Form = ({ onSubmitSuccess, onBack }) => {
   const [uploadedFiles, setUploadedFiles] = useState({
     idProof: null, registrationDoc: null, hospitalId: null, photo: null
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState('');
 
   // --- ALL ORIGINAL LOGIC PRESERVED ---
   useEffect(() => {
@@ -44,6 +49,54 @@ const Form = ({ onSubmitSuccess, onBack }) => {
     }
   }, [onboarding.state, essentials.state]);
 
+  const uploadToS3 = async (imageUri) => {
+    const fileName = `${Date.now()}_${Math.floor(Math.random() * 10000)}.jpg`;
+    const formData = new FormData();
+
+    // Check if running in a Web browser environment and handle Blob/base64 conversions correctly
+    if (imageUri instanceof File || imageUri instanceof Blob) {
+      formData.append('image', imageUri, fileName);
+    } else if (typeof imageUri === 'string' && imageUri.startsWith('data:')) {
+      try {
+        const arr = imageUri.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        formData.append('image', blob, fileName);
+      } catch (e) {
+        console.error("Failed to parse base64 URI", e);
+        formData.append('image', {
+          uri: imageUri,
+          name: fileName,
+          type: 'image/jpeg',
+        });
+      }
+    } else {
+      formData.append('image', {
+        uri: imageUri,
+        name: fileName,
+        type: 'image/jpeg',
+      });
+    }
+
+    try {
+      const res = await fetch(
+        `http://192.168.29.145:5000/duniyape/aws/upload`,
+        { method: "POST", body: formData }
+      );
+      const data = await res.json();
+      return data?.url;
+    } catch (err) {
+      console.error("S3 Error:", err);
+      return null;
+    }
+  };
+
   const handleFileChange = (e, field) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -59,30 +112,47 @@ const Form = ({ onSubmitSuccess, onBack }) => {
     if (essentials.password !== essentials.confirmPassword) return alert("Passwords do not match!");
     if (!onboarding.terms) return alert("Please accept the Terms & Conditions");
 
-    const documentsBase64 = {
-      idProof: uploadedFiles.idProof?.preview || null,
-      registrationDoc: uploadedFiles.registrationDoc?.preview || null,
-      hospitalId: uploadedFiles.hospitalId?.preview || null,
-      photo: uploadedFiles.photo?.preview || null,
-    };
-
-    const finalData = { 
-      id: `APP-${Date.now().toString().slice(-4)}`,
-      status: 'Pending',
-      date: new Date().toISOString().split('T')[0],
-      onboarding, 
-      essentials, 
-      documents: documentsBase64 
-    };
-
-    // Create a flat payload exactly matching the data and fields for the API request
-    const apiPayload = {
-      ...onboarding,
-      ...essentials,
-      ...documentsBase64
-    };
-
     try {
+      setIsSubmitting(true);
+      setSubmitStatus("Uploading documents to S3...");
+
+      // Upload all 4 files to S3 in parallel
+      const uploadPromises = Object.entries(uploadedFiles).map(async ([key, fileObj]) => {
+        if (!fileObj || !fileObj.file) return [key, null];
+        console.log(`Uploading ${key} to S3 on form submission...`);
+        const url = await uploadToS3(fileObj.file);
+        console.log(`Uploaded ${key} S3 URL:`, url);
+        return [key, url];
+      });
+
+      const uploadedResults = await Promise.all(uploadPromises);
+      const s3Urls = Object.fromEntries(uploadedResults);
+
+      setSubmitStatus("Synchronizing profile with backend...");
+
+      const documentsUrls = {
+        idProof: s3Urls.idProof || uploadedFiles.idProof?.preview || null,
+        registrationDoc: s3Urls.registrationDoc || uploadedFiles.registrationDoc?.preview || null,
+        hospitalId: s3Urls.hospitalId || uploadedFiles.hospitalId?.preview || null,
+        photo: s3Urls.photo || uploadedFiles.photo?.preview || null,
+      };
+
+      const finalData = { 
+        id: `APP-${Date.now().toString().slice(-4)}`,
+        status: 'Pending',
+        date: new Date().toISOString().split('T')[0],
+        onboarding, 
+        essentials, 
+        documents: documentsUrls 
+      };
+
+      // Create a flat payload exactly matching the data and fields for the API request
+      const apiPayload = {
+        ...onboarding,
+        ...essentials,
+        ...documentsUrls
+      };
+
       const response = await fetch("/api/c2c_app/doctor/request", {
         method: "POST",
         headers: {
@@ -124,6 +194,9 @@ const Form = ({ onSubmitSuccess, onBack }) => {
     } catch (error) {
       console.error("Submission failed:", error);
       alert("Failed to submit data to the server. Please check the console for details.");
+    } finally {
+      setIsSubmitting(false);
+      setSubmitStatus('');
     }
   };
 
@@ -134,7 +207,7 @@ const Form = ({ onSubmitSuccess, onBack }) => {
   const yearList = Array.from({ length: currentYear - 1949 }, (_, i) => (currentYear - i).toString());
 
   const isStepValid = (step) => {
-    switch(step) {
+    switch (step) {
       case 1: return !!(onboarding.fullName && essentials.email && essentials.email.includes('@') && onboarding.phone && essentials.secondaryId && onboarding.gender);
       case 2: return !!(onboarding.state && onboarding.college && onboarding.degree && onboarding.completionYear && onboarding.registrationNumber && onboarding.registrationYear && essentials.experience && onboarding.specialization);
       case 3: return !!(onboarding.clinicLocation && onboarding.clinicNumber && onboarding.timings && onboarding.fees && essentials.appointmentfee && essentials.otcfee && essentials.platformfee);
@@ -146,8 +219,17 @@ const Form = ({ onSubmitSuccess, onBack }) => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900">
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[9999] flex flex-col items-center justify-center text-white animate-in fade-in duration-300">
+          <div className="bg-white/10 p-8 rounded-[2.5rem] border border-white/20 flex flex-col items-center max-w-sm w-full mx-4 shadow-2xl text-center">
+            <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin mb-6"></div>
+            <h3 className="text-xl font-black uppercase tracking-wider mb-2">Submitting Profile</h3>
+            <p className="text-xs font-bold text-slate-200 uppercase tracking-widest animate-pulse">{submitStatus}</p>
+          </div>
+        </div>
+      )}
       {/* Floating Back Button */}
-      <button 
+      <button
         type="button"
         onClick={onBack}
         className="fixed top-4 left-4 z-50 px-4 py-2 bg-blue-900/40 backdrop-blur-md border border-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-900/60 transition-all shadow-lg"
@@ -159,7 +241,7 @@ const Form = ({ onSubmitSuccess, onBack }) => {
       <div className="w-full bg-gradient-to-r from-[#0f172a] via-[#1e3a8a] to-[#3b82f6] pt-12 pb-24 px-6 text-center text-white">
         <h1 className="text-3xl font-black italic tracking-tighter uppercase">Care2Connect</h1>
         <p className="text-[10px] font-bold uppercase opacity-60 tracking-[0.3em] mt-2">Horizontal Admin Workflow</p>
-        
+
         {/* Step Progress Bar */}
         <div className="max-w-2xl mx-auto mt-10 flex items-center justify-between relative">
           <div className="absolute top-1/2 left-0 w-full h-0.5 bg-white/20 -translate-y-1/2 z-0"></div>
@@ -178,17 +260,17 @@ const Form = ({ onSubmitSuccess, onBack }) => {
             {currentStep === 1 && (
               <StepWrapper title="Identity & Contacts">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Input label="Full Name" value={onboarding.fullName} onChange={v => { setOnboarding({...onboarding, fullName: v}); setEssentials({...essentials, name: v}); }} />
-                  <Input label="Email Address" type="email" error={essentials.email && !essentials.email.includes('@') ? "Must include @" : null} placeholder="doctor@example.com" value={essentials.email} onChange={v => setEssentials({...essentials, email: v})} />
-                  <Input label="Primary Phone" type="tel" pattern="[0-9]{10}" maxLength="10" placeholder="10-digit number" value={onboarding.phone} onChange={v => { setOnboarding({...onboarding, phone: v.replace(/[^0-9]/g, '')}); setEssentials({...essentials, phone: v.replace(/[^0-9]/g, '')}); }} />
-                  <Input label="Secondary ID" value={essentials.secondaryId} onChange={v => setEssentials({...essentials, secondaryId: v})} />
-                  <Input label="Phone Number ID" required={false} type="tel" pattern="[0-9]{10}" maxLength="10" placeholder="10-digit number" value={essentials.phonenumberID} onChange={v => setEssentials({...essentials, phonenumberID: v.replace(/[^0-9]/g, '')})} />
-                  <Input label="WhatsApp Business ID" required={false} type="tel" pattern="[0-9]{10}" maxLength="10" placeholder="10-digit number" value={essentials.whatsAppBusinessAccountID} onChange={v => setEssentials({...essentials, whatsAppBusinessAccountID: v.replace(/[^0-9]/g, '')})} />
+                  <Input label="Full Name" value={onboarding.fullName} onChange={v => { setOnboarding({ ...onboarding, fullName: v }); setEssentials({ ...essentials, name: v }); }} />
+                  <Input label="Email Address" type="email" error={essentials.email && !essentials.email.includes('@') ? "Must include @" : null} placeholder="doctor@example.com" value={essentials.email} onChange={v => setEssentials({ ...essentials, email: v })} />
+                  <Input label="Primary Phone" type="tel" pattern="[0-9]{10}" maxLength="10" placeholder="10-digit number" value={onboarding.phone} onChange={v => { setOnboarding({ ...onboarding, phone: v.replace(/[^0-9]/g, '') }); setEssentials({ ...essentials, phone: v.replace(/[^0-9]/g, '') }); }} />
+                  <Input label="Secondary ID" value={essentials.secondaryId} onChange={v => setEssentials({ ...essentials, secondaryId: v })} />
+                  <Input label="Phone Number ID" required={false} type="tel" pattern="[0-9]{10}" maxLength="10" placeholder="10-digit number" value={essentials.phonenumberID} onChange={v => setEssentials({ ...essentials, phonenumberID: v.replace(/[^0-9]/g, '') })} />
+                  <Input label="WhatsApp Business ID" required={false} type="tel" pattern="[0-9]{10}" maxLength="10" placeholder="10-digit number" value={essentials.whatsAppBusinessAccountID} onChange={v => setEssentials({ ...essentials, whatsAppBusinessAccountID: v.replace(/[^0-9]/g, '') })} />
                   <div className="md:col-span-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Gender Selection</label>
                     <div className="flex gap-3">
                       {['Male', 'Female', 'Other'].map(g => (
-                        <button key={g} type="button" onClick={() => setOnboarding({...onboarding, gender: g})}
+                        <button key={g} type="button" onClick={() => setOnboarding({ ...onboarding, gender: g })}
                           className={`flex-1 py-4 text-xs font-black rounded-2xl border-2 transition-all ${onboarding.gender === g ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 text-slate-400'}`}>
                           {g.toUpperCase()}
                         </button>
@@ -203,14 +285,14 @@ const Form = ({ onSubmitSuccess, onBack }) => {
             {currentStep === 2 && (
               <StepWrapper title="Academic & Medical License">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <SearchableDropdown label="Practice State" options={cityList} value={onboarding.state} onChange={v => { setOnboarding({...onboarding, state: v}); setEssentials({...essentials, state: v}); }} />
-                  <SearchableDropdown label="Medical College" options={collegeList} value={onboarding.college} onChange={v => setOnboarding({...onboarding, college: v})} />
-                  <SearchableDropdown label="Primary Degree" options={degreeList} value={onboarding.degree} onChange={v => setOnboarding({...onboarding, degree: v})} />
-                  <SearchableDropdown label="Completion Year" options={yearList} value={onboarding.completionYear} onChange={v => setOnboarding({...onboarding, completionYear: v})} />
-                  <Input label="Registration Number" value={onboarding.registrationNumber} onChange={v => setOnboarding({...onboarding, registrationNumber: v})} />
-                  <SearchableDropdown label="Registration Year" options={yearList} value={onboarding.registrationYear} onChange={v => setOnboarding({...onboarding, registrationYear: v})} />
-                  <Input label="Years of Experience" type="number" min="0" max="100" value={essentials.experience} onChange={v => { setEssentials({...essentials, experience: v}); setOnboarding({...onboarding, experience: v}); }} />
-                  <Input label="Specialization" value={onboarding.specialization} onChange={v => { setOnboarding({...onboarding, specialization: v}); setEssentials({...essentials, speciality: v}); }} />
+                  <SearchableDropdown label="Practice State" options={cityList} value={onboarding.state} onChange={v => { setOnboarding({ ...onboarding, state: v }); setEssentials({ ...essentials, state: v }); }} />
+                  <SearchableDropdown label="Medical College" options={collegeList} value={onboarding.college} onChange={v => setOnboarding({ ...onboarding, college: v })} />
+                  <SearchableDropdown label="Primary Degree" options={degreeList} value={onboarding.degree} onChange={v => setOnboarding({ ...onboarding, degree: v })} />
+                  <SearchableDropdown label="Completion Year" options={yearList} value={onboarding.completionYear} onChange={v => setOnboarding({ ...onboarding, completionYear: v })} />
+                  <Input label="Registration Number" value={onboarding.registrationNumber} onChange={v => setOnboarding({ ...onboarding, registrationNumber: v })} />
+                  <SearchableDropdown label="Registration Year" options={yearList} value={onboarding.registrationYear} onChange={v => setOnboarding({ ...onboarding, registrationYear: v })} />
+                  <Input label="Years of Experience" type="number" min="0" max="100" value={essentials.experience} onChange={v => { setEssentials({ ...essentials, experience: v }); setOnboarding({ ...onboarding, experience: v }); }} />
+                  <Input label="Specialization" value={onboarding.specialization} onChange={v => { setOnboarding({ ...onboarding, specialization: v }); setEssentials({ ...essentials, speciality: v }); }} />
                 </div>
               </StepWrapper>
             )}
@@ -219,17 +301,17 @@ const Form = ({ onSubmitSuccess, onBack }) => {
             {currentStep === 3 && (
               <StepWrapper title="Clinic & Fee Configuration">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Input label="Clinic Address" value={onboarding.clinicLocation} onChange={v => { setOnboarding({...onboarding, clinicLocation: v}); setEssentials({...essentials, address: v}); }} />
-                  <Input label="Clinic Number" type="tel" pattern="[0-9]{10}" maxLength="10" placeholder="10-digit number" value={onboarding.clinicNumber} onChange={v => setOnboarding({...onboarding, clinicNumber: v.replace(/[^0-9]/g, '')})} />
+                  <Input label="Clinic Address" value={onboarding.clinicLocation} onChange={v => { setOnboarding({ ...onboarding, clinicLocation: v }); setEssentials({ ...essentials, address: v }); }} />
+                  <Input label="Clinic Number" type="tel" pattern="[0-9]{10}" maxLength="10" placeholder="10-digit number" value={onboarding.clinicNumber} onChange={v => setOnboarding({ ...onboarding, clinicNumber: v.replace(/[^0-9]/g, '') })} />
                   <div className="md:col-span-2">
-                    <Input label="Available Time Slots" placeholder="ex 10:00 AM - 2:00 PM" value={onboarding.timings} onChange={v => setOnboarding({...onboarding, timings: v})} />
+                    <Input label="Available Time Slots" placeholder="ex 10:00 AM - 2:00 PM" value={onboarding.timings} onChange={v => setOnboarding({ ...onboarding, timings: v })} />
                   </div>
                 </div>
                 <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <FeeInput label="Doc Fee" value={onboarding.fees} onChange={v => { setOnboarding({...onboarding, fees: v}); setEssentials({...essentials, doctorfee: v}); }} />
-                  <FeeInput label="Appt Fee" value={essentials.appointmentfee} onChange={v => setEssentials({...essentials, appointmentfee: v})} />
-                  <FeeInput label="OTC Fee" value={essentials.otcfee} onChange={v => setEssentials({...essentials, otcfee: v})} />
-                  <FeeInput label="Platform" value={essentials.platformfee} onChange={v => setEssentials({...essentials, platformfee: v})} />
+                  <FeeInput label="Doc Fee" value={onboarding.fees} onChange={v => { setOnboarding({ ...onboarding, fees: v }); setEssentials({ ...essentials, doctorfee: v }); }} />
+                  <FeeInput label="Appt Fee" value={essentials.appointmentfee} onChange={v => setEssentials({ ...essentials, appointmentfee: v })} />
+                  <FeeInput label="OTC Fee" value={essentials.otcfee} onChange={v => setEssentials({ ...essentials, otcfee: v })} />
+                  <FeeInput label="Platform" value={essentials.platformfee} onChange={v => setEssentials({ ...essentials, platformfee: v })} />
                 </div>
               </StepWrapper>
             )}
@@ -250,8 +332,8 @@ const Form = ({ onSubmitSuccess, onBack }) => {
             {currentStep === 5 && (
               <StepWrapper title="Security & Confirmation">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                  <Input label="Admin Password" type="password" value={essentials.password} onChange={v => setEssentials({...essentials, password: v})} />
-                  <Input label="Confirm Password" type="password" value={essentials.confirmPassword} onChange={v => setEssentials({...essentials, confirmPassword: v})} />
+                  <Input label="Admin Password" type="password" value={essentials.password} onChange={v => setEssentials({ ...essentials, password: v })} />
+                  <Input label="Confirm Password" type="password" value={essentials.confirmPassword} onChange={v => setEssentials({ ...essentials, confirmPassword: v })} />
                 </div>
                 <div className="mb-8 pl-1">
                   {essentials.password && essentials.confirmPassword ? (
@@ -265,12 +347,12 @@ const Form = ({ onSubmitSuccess, onBack }) => {
                   )}
                 </div>
                 <label className="flex items-center gap-4 p-6 bg-blue-50 rounded-2xl border border-blue-100 cursor-pointer mb-8">
-                  <input type="checkbox" checked={onboarding.terms} onChange={e => setOnboarding({...onboarding, terms: e.target.checked})} className="w-6 h-6 rounded text-blue-600" />
+                  <input type="checkbox" checked={onboarding.terms} onChange={e => setOnboarding({ ...onboarding, terms: e.target.checked })} className="w-6 h-6 rounded text-blue-600" />
                   <span className="text-xs font-black text-blue-900 uppercase tracking-tighter">I certify all information is correct.</span>
                 </label>
-                <button 
-                  type="button" 
-                  onClick={nextStep} 
+                <button
+                  type="button"
+                  onClick={nextStep}
                   disabled={!isStepValid(5)}
                   className={`w-full font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm transition-all ${!isStepValid(5) ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-800 text-white shadow-blue-200'}`}
                 >
@@ -344,9 +426,9 @@ const Form = ({ onSubmitSuccess, onBack }) => {
               ← Back
             </button>
             {currentStep < 6 && (
-              <button 
-                type="button" 
-                onClick={nextStep} 
+              <button
+                type="button"
+                onClick={nextStep}
                 disabled={!isStepValid(currentStep)}
                 className={`border-2 px-10 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isStepValid(currentStep) ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white'}`}
               >
@@ -422,7 +504,7 @@ const SearchableDropdown = ({ label, options, value, onChange, required = true }
       {open && (
         <div className="absolute top-[105%] left-0 w-full bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 max-h-40 overflow-y-auto p-2">
           {options.filter(o => o.toLowerCase().includes(search.toLowerCase())).map((o, i) => (
-            <div key={i} onMouseDown={() => {onChange(o); setOpen(false);}} className="p-3 text-[11px] font-bold text-slate-600 hover:bg-blue-600 hover:text-white cursor-pointer rounded-xl transition-all">{o}</div>
+            <div key={i} onMouseDown={() => { onChange(o); setOpen(false); }} className="p-3 text-[11px] font-bold text-slate-600 hover:bg-blue-600 hover:text-white cursor-pointer rounded-xl transition-all">{o}</div>
           ))}
         </div>
       )}
