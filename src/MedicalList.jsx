@@ -34,7 +34,8 @@ const MedicalList = ({ submissions, onBack, onAction }) => {
         const mappedList = list.map(item => {
           const m = item.medical || {};
           return {
-            id: item.medical_id || item.id || item._id,
+            id: item.medical_id || item._id || item.id,
+            customId: item.id || item.medical_id || item._id,
             status: item.status || 'Pending',
             doctorId: item.doctorId || item.doctor_id,
             doctorName: item.doctorName || item.doctor_name,
@@ -77,10 +78,12 @@ const MedicalList = ({ submissions, onBack, onAction }) => {
 
   const handleActionClick = async (id, actionType) => {
     const payloadStatus = actionType.toLowerCase();
+    console.log(id,selectedForm)
+    
 
     try {
       const response = await fetch(`/api/c2c_app/medical/review/${id}`, {
-        method: 'PUT',
+        method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true'
@@ -194,7 +197,7 @@ const MedicalList = ({ submissions, onBack, onAction }) => {
                     onClick={() => setSelectedForm(sub)}
                     className="grid grid-cols-1 md:grid-cols-12 gap-4 py-4 px-6 border-b border-slate-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-all items-center group"
                   >
-                    <div className="hidden md:block col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">{sub.id}</div>
+                    <div className="hidden md:block col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">{sub.customId || sub.id}</div>
                     
                     <div className="col-span-1 md:col-span-3 flex flex-col justify-center">
                       <span className="md:hidden text-[9px] font-black uppercase text-slate-400 mb-1">Medical Name</span>
@@ -239,7 +242,7 @@ const MedicalList = ({ submissions, onBack, onAction }) => {
                 {/* Details Header */}
                 <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-8 pb-6 border-b border-slate-100 gap-4">
                   <div>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{selectedForm.id}</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{selectedForm.customId || selectedForm.id}</span>
                     <h2 className="text-3xl font-black text-slate-800 mt-1">{selectedForm.medical?.medicalName}</h2>
                   </div>
                   <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest self-start md:self-auto shadow-md ${selectedForm.status?.toLowerCase() === 'approved' ? 'bg-green-600 text-white border-2 border-green-700' :
