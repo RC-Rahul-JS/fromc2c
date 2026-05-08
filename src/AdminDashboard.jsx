@@ -30,6 +30,13 @@ const AdminDashboard = ({ submissions, onBack, onAction }) => {
         otcfee: "200",
         platformfee: "100"
       },
+      bankDetails: {
+        accountHolderName: "Dr. Rahul Sharma",
+        bankName: "State Bank of India",
+        accountNumber: "50100012345678",
+        ifscCode: "SBIN0001234",
+        upiId: "rahul@okaxis"
+      },
       documents: {
         idProof: { preview: "https://via.placeholder.com/150" },
         registrationDoc: { preview: "https://via.placeholder.com/150" },
@@ -155,6 +162,20 @@ const AdminDashboard = ({ submissions, onBack, onAction }) => {
                           <DetailRow label="Appt Fee" value={`₹${selectedForm.essentials?.appointmentfee || 0}`} />
                           <DetailRow label="OTC Fee" value={`₹${selectedForm.essentials?.otcfee || 0}`} />
                           <DetailRow label="Platform Fee" value={`₹${selectedForm.essentials?.platformfee || 0}`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 3.5: Bank Details */}
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 md:col-span-2">
+                      <h3 className="font-black text-blue-900 border-b border-slate-200 pb-3 mb-4 text-sm uppercase tracking-wider">Bank Details</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <DetailRow label="Account Holder Name" value={selectedForm.bankDetails?.accountHolderName} />
+                        <DetailRow label="Bank Name" value={selectedForm.bankDetails?.bankName} />
+                        <DetailRow label="Account Number" value={selectedForm.bankDetails?.accountNumber} />
+                        <DetailRow label="IFSC Code" value={selectedForm.bankDetails?.ifscCode} />
+                        <div className="md:col-span-2">
+                          <DetailRow label="UPI ID" value={selectedForm.bankDetails?.upiId} />
                         </div>
                       </div>
                     </div>

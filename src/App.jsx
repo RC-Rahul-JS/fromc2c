@@ -5,10 +5,13 @@ import Form from './Form';
 import List from './List';
 import MedicalForm from './MedicalForm';
 import MedicalList from './MedicalList';
+import HospitalForm from './HospitalForm';
+import HospitalList from './HospitalList';
 
 const App = () => {
   const [allSubmissions, setAllSubmissions] = useState([]);
   const [medicalSubmissions, setMedicalSubmissions] = useState([]);
+  const [hospitalSubmissions, setHospitalSubmissions] = useState([]);
 
   const handleFormSubmit = (finalData) => {
     setAllSubmissions(prev => [...prev, finalData]);
@@ -24,6 +27,14 @@ const App = () => {
 
   const handleMedicalListAction = (id, actionType) => {
     setMedicalSubmissions(prev => prev.map(sub => sub.id === id ? { ...sub, status: actionType } : sub));
+  };
+
+  const handleHospitalFormSubmit = (finalData) => {
+    setHospitalSubmissions(prev => [...prev, finalData]);
+  };
+
+  const handleHospitalListAction = (id, actionType) => {
+    setHospitalSubmissions(prev => prev.map(sub => sub.id === id ? { ...sub, status: actionType } : sub));
   };
 
   return (
@@ -56,6 +67,19 @@ const App = () => {
           <MedicalList 
             submissions={medicalSubmissions} 
             onAction={handleMedicalListAction}
+          />
+        } />
+
+        <Route path="/hospital-form" element={
+          <HospitalForm 
+            onSubmitSuccess={handleHospitalFormSubmit} 
+          />
+        } />
+
+        <Route path="/hospital-list" element={
+          <HospitalList 
+            submissions={hospitalSubmissions} 
+            onAction={handleHospitalListAction}
           />
         } />
 

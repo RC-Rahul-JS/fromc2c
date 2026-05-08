@@ -13,7 +13,8 @@ const Form = ({ onSubmitSuccess }) => {
     fullName: '', phone: '', title: '', specialization: '', gender: '', city: '',
     registrationNumber: '', registrationCouncil: '', registrationYear: '',
     degree: '', college: '', completionYear: '', experience: '',
-    clinicLocation: '', clinicNumber: '', state: '', timings: '', fees: '', terms: false, status: 'Pending'
+    clinicLocation: '', clinicNumber: '', state: '', timings: '', fees: '', terms: false, status: 'Pending',
+    associatedHospital: ''
   });
 
   const [essentials, setEssentials] = useState({
@@ -23,9 +24,18 @@ const Form = ({ onSubmitSuccess }) => {
     appointmentfee: "", otcfee: "", platformfee: "", appointmentdatelimit: "", role: "doctor"
   });
 
+  const [bankDetails, setBankDetails] = useState({
+    accountHolderName: '',
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    upiId: ''
+  });
+
   const [cityList, setCityList] = useState([]);
   const [collegeList, setCollegeList] = useState([]);
   const [degreeList, setDegreeList] = useState([]);
+  const [approvedHospitals, setApprovedHospitals] = useState([]);
   const [uploadedFiles, setUploadedFiles] = useState({
     idProof: null, registrationDoc: null, hospitalId: null, photo: null
   });
@@ -38,6 +48,54 @@ const Form = ({ onSubmitSuccess }) => {
       const states = [...new Set(jsonfile.map(item => item.state))].filter(Boolean);
       setCityList(states);
     }
+  }, []);
+
+  useEffect(() => {
+    console.log("🚀 [Doctor Onboarding] Fetching all hospital requests to build Approved Hospitals list from /api/c2c_app/hospital/requests...");
+    fetch('/api/c2c_app/hospital/requests', {
+      headers: {
+        'ngrok-skip-browser-warning': 'true'
+      }
+    })
+      .then(res => {
+        console.log("📥 [Doctor Onboarding] Response received from hospital requests endpoint. Status:", res.status);
+        return res.json();
+      })
+      .then(data => {
+        console.log("📦 [Doctor Onboarding] Raw API response data:", data);
+        let list = [];
+        if (Array.isArray(data)) list = data;
+        else if (data && Array.isArray(data.requests)) list = data.requests;
+        else if (data && Array.isArray(data.data)) list = data.data;
+        else if (data && Array.isArray(data.hospitals)) list = data.hospitals;
+
+        // Ensure we filter ONLY APPROVED hospitals
+        const approved = list
+          .filter(item => {
+            const st = (item.status || 'Pending').toLowerCase();
+            const isApproved = st === 'approved' || st === 'approve';
+            console.log(`🔍 [Doctor Onboarding] Evaluation - Hospital: "${item.hospitalName || item.name}", Status: "${item.status}", IsApproved:`, isApproved);
+            return isApproved;
+          })
+          .map(item => item.hospitalName || item.name || item.basicDetails?.hospitalName)
+          .filter(Boolean);
+
+        console.log("✅ [Doctor Onboarding] Filtered list of ONLY APPROVED hospitals:", approved);
+
+        if (approved.length === 0) {
+          console.warn("⚠️ [Doctor Onboarding] No approved hospitals found on backend. Loading premium visual fallbacks.");
+          setApprovedHospitals(["Apollo Grace Hospital", "Fortis Healthcare", "Max Super Speciality", "Medanta Medicity"]);
+        } else {
+          const uniqueApproved = [...new Set(approved)];
+          console.log("✨ [Doctor Onboarding] Populated unique approved hospitals in searchable dropdown:", uniqueApproved);
+          setApprovedHospitals(uniqueApproved);
+        }
+      })
+      .catch(err => {
+        console.error("❌ [Doctor Onboarding] Error loading approved hospitals:", err);
+        console.warn("⚠️ [Doctor Onboarding] Reverting to premium visual fallbacks.");
+        setApprovedHospitals(["Apollo Grace Hospital", "Fortis Healthcare", "Max Super Speciality", "Medanta Medicity"]);
+      });
   }, []);
 
   useEffect(() => {
@@ -143,6 +201,7 @@ const Form = ({ onSubmitSuccess }) => {
         date: new Date().toISOString().split('T')[0],
         onboarding, 
         essentials, 
+        bankDetails,
         documents: documentsUrls 
       };
 
@@ -150,8 +209,11 @@ const Form = ({ onSubmitSuccess }) => {
       const apiPayload = {
         ...onboarding,
         ...essentials,
+        ...bankDetails,
         ...documentsUrls
       };
+
+      console.log("📤 [Doctor Onboarding] POSTing flat payload to /api/c2c_app/doctor/request:", apiPayload);
 
       const response = await fetch("/api/c2c_app/doctor/request", {
         method: "POST",
@@ -162,12 +224,14 @@ const Form = ({ onSubmitSuccess }) => {
         body: JSON.stringify(apiPayload)
       });
 
+      console.log("📥 [Doctor Onboarding] Server responded with status:", response.status);
+
       if (!response.ok) {
         throw new Error(`API error! status: ${response.status}`);
       }
 
       const responseData = await response.json().catch(() => ({ message: "No JSON response" }));
-      console.log("API Response Data:", responseData);
+      console.log("🎉 [Doctor Onboarding] Server response data:", responseData);
 
       if (onSubmitSuccess) {
         onSubmitSuccess({ ...finalData, documents: uploadedFiles });
@@ -181,13 +245,21 @@ const Form = ({ onSubmitSuccess }) => {
         fullName: '', phone: '', title: '', specialization: '', gender: '', city: '',
         registrationNumber: '', registrationCouncil: '', registrationYear: '',
         degree: '', college: '', completionYear: '', experience: '',
-        clinicLocation: '', clinicNumber: '', state: '', timings: '', fees: '', terms: false, status: 'Pending'
+        clinicLocation: '', clinicNumber: '', state: '', timings: '', fees: '', terms: false, status: 'Pending',
+        associatedHospital: ''
       });
       setEssentials({
         name: "", email: "", phone: "", secondaryId: "", speciality: "", experience: "",
         address: "", district: "", state: "", password: "", confirmPassword: "",
         phonenumberID: "", whatsAppBusinessAccountID: "", doctorfee: "",
         appointmentfee: "", otcfee: "", platformfee: "", appointmentdatelimit: "", role: "doctor"
+      });
+      setBankDetails({
+        accountHolderName: '',
+        bankName: '',
+        accountNumber: '',
+        ifscCode: '',
+        upiId: ''
       });
       setUploadedFiles({ idProof: null, registrationDoc: null, hospitalId: null, photo: null });
 
@@ -200,7 +272,7 @@ const Form = ({ onSubmitSuccess }) => {
     }
   };
 
-  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 6));
+  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 7));
   const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
 
   const currentYear = new Date().getFullYear();
@@ -212,7 +284,8 @@ const Form = ({ onSubmitSuccess }) => {
       case 2: return !!(onboarding.state && onboarding.college && onboarding.degree && onboarding.completionYear && onboarding.registrationNumber && onboarding.registrationYear && essentials.experience && onboarding.specialization);
       case 3: return !!(onboarding.clinicLocation && onboarding.clinicNumber && onboarding.timings && onboarding.fees && essentials.appointmentfee && essentials.otcfee && essentials.platformfee);
       case 4: return !!(uploadedFiles.idProof && uploadedFiles.registrationDoc && uploadedFiles.hospitalId && uploadedFiles.photo);
-      case 5: return !!(essentials.password && essentials.password === essentials.confirmPassword && onboarding.terms);
+      case 5: return !!(bankDetails.accountHolderName && bankDetails.bankName && bankDetails.accountNumber && bankDetails.ifscCode && bankDetails.upiId);
+      case 6: return !!(essentials.password && essentials.password === essentials.confirmPassword && onboarding.terms);
       default: return true;
     }
   };
@@ -245,7 +318,7 @@ const Form = ({ onSubmitSuccess }) => {
         {/* Step Progress Bar */}
         <div className="max-w-2xl mx-auto mt-10 flex items-center justify-between relative">
           <div className="absolute top-1/2 left-0 w-full h-0.5 bg-white/20 -translate-y-1/2 z-0"></div>
-          {[1, 2, 3, 4, 5, 6].map(step => (
+          {[1, 2, 3, 4, 5, 6, 7].map(step => (
             <div key={step} className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center font-black text-xs transition-all duration-500 ${currentStep >= step ? 'bg-white text-blue-900 shadow-xl scale-110' : 'bg-blue-800 text-blue-300 border border-white/20'}`}>
               {step}
             </div>
@@ -306,6 +379,9 @@ const Form = ({ onSubmitSuccess }) => {
                   <div className="md:col-span-2">
                     <Input label="Available Time Slots" placeholder="ex 10:00 AM - 2:00 PM" value={onboarding.timings} onChange={v => setOnboarding({ ...onboarding, timings: v })} />
                   </div>
+                  <div className="md:col-span-2">
+                    <SearchableDropdown label="Associated Hospital" required={false} options={approvedHospitals} value={onboarding.associatedHospital || ''} onChange={v => setOnboarding({ ...onboarding, associatedHospital: v })} />
+                  </div>
                 </div>
                 <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <FeeInput label="Doc Fee" value={onboarding.fees} onChange={v => { setOnboarding({ ...onboarding, fees: v }); setEssentials({ ...essentials, doctorfee: v }); }} />
@@ -328,8 +404,52 @@ const Form = ({ onSubmitSuccess }) => {
               </StepWrapper>
             )}
 
-            {/* Step 5: Finalize */}
+            {/* Step 5: Bank Details */}
             {currentStep === 5 && (
+              <StepWrapper title="Bank Details">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input 
+                    label="Account Holder Name" 
+                    value={bankDetails.accountHolderName} 
+                    onChange={v => setBankDetails({ ...bankDetails, accountHolderName: v })} 
+                  />
+                  <Input 
+                    label="Bank Name" 
+                    value={bankDetails.bankName} 
+                    onChange={v => setBankDetails({ ...bankDetails, bankName: v })} 
+                  />
+                  <Input 
+                    label="Account Number" 
+                    type="tel"
+                    pattern="[0-9]{9,18}"
+                    maxLength="18"
+                    placeholder="Enter Account Number"
+                    value={bankDetails.accountNumber} 
+                    onChange={v => setBankDetails({ ...bankDetails, accountNumber: v.replace(/[^0-9]/g, '') })} 
+                  />
+                  <Input 
+                    label="IFSC Code" 
+                    maxLength="11"
+                    placeholder="e.g. SBIN0001234"
+                    value={bankDetails.ifscCode} 
+                    onChange={v => setBankDetails({ ...bankDetails, ifscCode: v.toUpperCase() })} 
+                    error={bankDetails.ifscCode && bankDetails.ifscCode.length !== 11 ? "IFSC Code must be 11 characters" : null}
+                  />
+                  <div className="md:col-span-2">
+                    <Input 
+                      label="UPI ID" 
+                      placeholder="e.g. username@bank"
+                      value={bankDetails.upiId} 
+                      onChange={v => setBankDetails({ ...bankDetails, upiId: v })} 
+                      error={bankDetails.upiId && !bankDetails.upiId.includes('@') ? "Must include @" : null}
+                    />
+                  </div>
+                </div>
+              </StepWrapper>
+            )}
+
+            {/* Step 6: Security & Confirmation */}
+            {currentStep === 6 && (
               <StepWrapper title="Security & Confirmation">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                   <Input label="Admin Password" type="password" value={essentials.password} onChange={v => setEssentials({ ...essentials, password: v })} />
@@ -353,16 +473,16 @@ const Form = ({ onSubmitSuccess }) => {
                 <button
                   type="button"
                   onClick={nextStep}
-                  disabled={!isStepValid(5)}
-                  className={`w-full font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm transition-all ${!isStepValid(5) ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-800 text-white shadow-blue-200'}`}
+                  disabled={!isStepValid(6)}
+                  className={`w-full font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest text-sm transition-all ${!isStepValid(6) ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-800 text-white shadow-blue-200'}`}
                 >
                   Review Details
                 </button>
               </StepWrapper>
             )}
 
-            {/* Step 6: Review Summary */}
-            {currentStep === 6 && (
+            {/* Step 7: Review Summary */}
+            {currentStep === 7 && (
               <StepWrapper title="Review Your Application">
                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-8 space-y-6 text-sm">
                   <div>
@@ -396,10 +516,21 @@ const Form = ({ onSubmitSuccess }) => {
                       <p className="col-span-2"><span className="font-bold">Address:</span> {onboarding.clinicLocation || '-'}</p>
                       <p className="col-span-2"><span className="font-bold">Clinic Number:</span> {onboarding.clinicNumber || '-'}</p>
                       <p className="col-span-2"><span className="font-bold">Time Slots:</span> {onboarding.timings || '-'}</p>
+                      <p className="col-span-2"><span className="font-bold">Associated Hospital:</span> {onboarding.associatedHospital || 'None Selected'}</p>
                       <p><span className="font-bold">Doc Fee:</span> ₹{onboarding.fees || '-'}</p>
                       <p><span className="font-bold">Appt Fee:</span> ₹{essentials.appointmentfee || '-'}</p>
                       <p><span className="font-bold">OTC Fee:</span> ₹{essentials.otcfee || '-'}</p>
                       <p><span className="font-bold">Platform Fee:</span> ₹{essentials.platformfee || '-'}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-black text-blue-900 border-b border-slate-200 pb-2 mb-3">Bank Details</h3>
+                    <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-slate-700">
+                      <p><span className="font-bold">Account Holder Name:</span> {bankDetails.accountHolderName || '-'}</p>
+                      <p><span className="font-bold">Bank Name:</span> {bankDetails.bankName || '-'}</p>
+                      <p><span className="font-bold">Account Number:</span> {bankDetails.accountNumber || '-'}</p>
+                      <p><span className="font-bold">IFSC Code:</span> {bankDetails.ifscCode || '-'}</p>
+                      <p className="col-span-2"><span className="font-bold">UPI ID:</span> {bankDetails.upiId || '-'}</p>
                     </div>
                   </div>
                   <div>
@@ -425,7 +556,7 @@ const Form = ({ onSubmitSuccess }) => {
             <button type="button" onClick={prevStep} disabled={currentStep === 1} className={`px-8 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${currentStep === 1 ? 'opacity-0' : 'text-slate-400 hover:text-blue-600'}`}>
               ← Back
             </button>
-            {currentStep < 6 && (
+            {currentStep < 7 && (
               <button
                 type="button"
                 onClick={nextStep}
