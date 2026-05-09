@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://hyphen-chemo-exponent.ngrok-free.dev',
+        target: 'http://192.168.29.145:5000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }

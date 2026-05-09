@@ -4,11 +4,23 @@ import { useNavigate } from 'react-router-dom';
 const MedicalForm = ({ onSubmitSuccess }) => {
   const navigate = useNavigate();
   const onBack = () => navigate('/dashboard');
+  
+  // --- STATE: STEP TRACKING ---
+  const [currentStep, setCurrentStep] = useState(1);
+
+  // --- STATE: API DATA STORES ---
   const [doctors, setDoctors] = useState([]);
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
 
-  // Form State
+  const [hospitals, setHospitals] = useState([]);
+  const [isLoadingHospitals, setIsLoadingHospitals] = useState(true);
+  const [selectedHospital, setSelectedHospital] = useState(null);
+  
+  const [selectedHospitalId, setSelectedHospitalId] = useState('');
+  const [selectedDoctorId, setSelectedDoctorId] = useState('');
+
+  // --- STATE: FORM DETAILS ---
   const [medicalName, setMedicalName] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [address, setAddress] = useState('');
@@ -32,11 +44,12 @@ const MedicalForm = ({ onSubmitSuccess }) => {
   const [email, setEmail] = useState('');
   const [pharmacistName, setPharmacistName] = useState('');
   const [pharmacistRegNumber, setPharmacistRegNumber] = useState('');
-  const [isReviewing, setIsReviewing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch('/api/c2c_app/doctors', {
+    // 1. Fetch Approved Doctors
+    setIsLoadingDoctors(true);
+    fetch('/api/c2c_app/doctor/requests', {
       headers: {
         'ngrok-skip-browser-warning': 'true'
       }
@@ -46,7 +59,7 @@ const MedicalForm = ({ onSubmitSuccess }) => {
         return res.json();
       })
       .then(data => {
-        console.log("Raw API Response (GET Doctors for Medical Form):", data);
+        console.log("Raw API Response (GET Doctor Requests for Medical Form):", data);
         let list = [];
         if (Array.isArray(data)) list = data;
         else if (data && Array.isArray(data.requests)) list = data.requests;
@@ -56,27 +69,72 @@ const MedicalForm = ({ onSubmitSuccess }) => {
           list = Object.values(data).filter(v => typeof v === 'object');
         }
 
-        const mappedList = list.map(item => ({
-          id: item.doctor_id || item.id || item._id,
-          status: item.status || 'Pending',
-          fullName: item.Name || item.name,
-          phone: item.phone,
-          specialization: item.specialization || item.speciality,
-          clinicLocation: item.clinicLocation || item.address,
-        }));
+        const mappedList = list
+          .map(item => ({
+            id: item.doctor_id || item.id || item._id,
+            status: item.status || 'Pending',
+            fullName: item.onboarding?.fullName || item.Name || item.name || '',
+            phone: item.onboarding?.phone || item.phone || '',
+            specialization: item.onboarding?.specialization || item.specialization || item.speciality || '',
+            clinicLocation: item.onboarding?.clinicLocation || item.clinicLocation || item.address || '',
+            associatedHospital: item.onboarding?.associatedHospital || item.associatedHospital || item.associated_hospital || item.AssociatedHospital || ''
+          }))
+          // Only show APPROVED doctors
+          .filter(doc => {
+            const st = (doc.status || '').toLowerCase();
+            return st === 'approved' || st === 'approve';
+          });
 
-        // Filter only approved doctors
-        // const approvedDoctors = mappedList.filter(doc => doc.status?.toLowerCase() === 'approved');
+        console.log("Mapped Approved Doctors List for Medical Selection Form:", mappedList);
         setDoctors(mappedList);
-        setIsLoadingDoctors(false);
       })
       .catch(err => {
         console.error("Error fetching doctors:", err);
-        // Fallback to mock approved doctor if fetch fails so user can proceed
-        setDoctors([
-          { id: "APP-001", status: "Approved", fullName: "Dr. Rahul Sharma", phone: "9876543210", clinicLocation: "Mumbai Central, MH" }
-        ]);
+        setDoctors([]);
+      })
+      .finally(() => {
         setIsLoadingDoctors(false);
+      });
+
+    // 2. Fetch Approved Hospitals
+    setIsLoadingHospitals(true);
+    fetch('/api/c2c_app/hospital/requests', {
+      headers: {
+        'ngrok-skip-browser-warning': 'true'
+      }
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("HTTP Status " + res.status);
+        return res.json();
+      })
+      .then(data => {
+        console.log("Raw Hospital Response (GET Hospitals for Medical Form):", data);
+        let list = [];
+        if (Array.isArray(data)) list = data;
+        else if (data && Array.isArray(data.requests)) list = data.requests;
+        else if (data && Array.isArray(data.data)) list = data.data;
+        else if (data && Array.isArray(data.hospitals)) list = data.hospitals;
+
+        const approvedList = list
+          .filter(h => {
+            const st = (h.status || '').toLowerCase();
+            return st === 'approved' || st === 'approve';
+          })
+          .map(h => ({
+            id: h.id || h._id,
+            name: h.basicDetails?.hospitalName || h.hospitalName || h.Name || h.name || ''
+          }))
+          .filter(h => h.name); // Ensure name is not empty
+
+        console.log("Mapped Approved Hospitals List for Medical Selection Form:", approvedList);
+        setHospitals(approvedList);
+      })
+      .catch(err => {
+        console.error("Error fetching hospitals for medical form:", err);
+        setHospitals([]);
+      })
+      .finally(() => {
+        setIsLoadingHospitals(false);
       });
   }, []);
 
@@ -101,18 +159,14 @@ const MedicalForm = ({ onSubmitSuccess }) => {
     devices: "Medical Devices"
   };
 
-  const handleReviewSubmit = (e) => {
-    e.preventDefault();
-    setIsReviewing(true);
-  };
-
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
     const finalData = {
       id: "MED-" + Math.floor(Math.random() * 10000),
       status: "Pending",
-      doctorId: selectedDoctor.id,
-      doctorName: selectedDoctor.fullName,
+      doctorId: selectedDoctor?.id,
+      doctorName: selectedDoctor?.fullName,
+      doctorHospital: selectedDoctor?.associatedHospital || 'None Selected',
       medical: {
         medicalName,
         whatsappNumber,
@@ -148,6 +202,39 @@ const MedicalForm = ({ onSubmitSuccess }) => {
       if (onSubmitSuccess) {
         onSubmitSuccess(finalData);
       }
+
+      alert("Medical Profile Synchronized Successfully!");
+      
+      // Reset form fields
+      setCurrentStep(1);
+      setMedicalName('');
+      setWhatsappNumber('');
+      setAddress('');
+      setMedicalTypes({
+        prescription: false,
+        otc: false,
+        generic: false,
+        branded: false,
+        ayurvedic: false,
+        homeopathic: false,
+        surgical: false,
+        supplements: false,
+        babyCare: false,
+        personalCare: false,
+        devices: false
+      });
+      setLicenseNumber('');
+      setGstNumber('');
+      setRegistrationYear('');
+      setOwnerName('');
+      setEmail('');
+      setPharmacistName('');
+      setPharmacistRegNumber('');
+      setSelectedHospitalId('');
+      setSelectedHospital(null);
+      setSelectedDoctorId('');
+      setSelectedDoctor(null);
+
     } catch (error) {
       console.error("Submission failed:", error);
       alert("Failed to submit form. Please check the API. Error: " + error.message);
@@ -156,219 +243,382 @@ const MedicalForm = ({ onSubmitSuccess }) => {
     }
   };
 
+  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 4));
+  const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
+
+  const isStepValid = (step) => {
+    switch (step) {
+      case 1: 
+        return !!selectedDoctorId && !isLoadingDoctors;
+      case 2:
+        return !!(
+          medicalName && 
+          ownerName && 
+          registrationYear && registrationYear.length === 4 &&
+          whatsappNumber && whatsappNumber.length === 10 && 
+          email && email.includes('@') && 
+          address
+        );
+      case 3:
+        return !!(
+          licenseNumber && 
+          pharmacistName && 
+          pharmacistRegNumber &&
+          Object.values(medicalTypes).some(v => v === true)
+        );
+      case 4:
+        return true;
+      default:
+        return true;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 relative pb-20">
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-indigo-950/70 backdrop-blur-md z-[9999] flex flex-col items-center justify-center text-white animate-in fade-in duration-300">
+          <div className="bg-white/10 p-8 rounded-[2.5rem] border border-white/20 flex flex-col items-center max-w-sm w-full mx-4 shadow-2xl text-center">
+            <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin mb-6"></div>
+            <h3 className="text-xl font-black uppercase tracking-wider mb-2">Submitting Profile</h3>
+            <p className="text-xs font-bold text-indigo-200 uppercase tracking-widest animate-pulse">Synchronizing Database...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Back Button */}
       <button
         type="button"
-        onClick={isReviewing ? () => setIsReviewing(false) : (selectedDoctor ? () => setSelectedDoctor(null) : onBack)}
-        className="fixed top-4 left-4 z-50 px-4 py-2 bg-blue-900/40 backdrop-blur-md border border-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-900/60 transition-all shadow-lg"
+        onClick={currentStep > 1 ? () => setCurrentStep(currentStep - 1) : onBack}
+        className="fixed top-4 left-4 z-50 px-4 py-2 bg-indigo-900/40 backdrop-blur-md border border-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-900/60 transition-all shadow-lg"
       >
-        {isReviewing ? '← Back to Edit' : (selectedDoctor ? '← Back to Doctors' : '← Dashboard')}
+        {currentStep > 1 ? '← Back' : '← Dashboard'}
       </button>
 
-      <div className="w-full bg-gradient-to-r from-[#0f172a] via-[#1e3a8a] to-[#3b82f6] pt-12 pb-24 px-6 text-center text-white">
+      {/* Header with 4-Step Progress Bar */}
+      <div className="w-full bg-gradient-to-r from-[#0f172a] via-[#312e81] to-[#4f46e5] pt-12 pb-24 px-6 text-center text-white">
         <h1 className="text-3xl font-black italic tracking-tighter uppercase">Care2Connect</h1>
         <p className="text-[10px] font-bold uppercase opacity-60 tracking-[0.3em] mt-2">
-          Medical Onboarding
+          Medical Onboarding System
         </p>
+
+        {/* 4-Step Progress Bar */}
+        <div className="max-w-4xl mx-auto mt-10 flex items-center justify-between relative overflow-x-auto py-4">
+          <div className="absolute top-1/2 left-0 w-full h-0.5 bg-white/20 -translate-y-1/2 z-0"></div>
+          {Array.from({ length: 4 }, (_, i) => i + 1).map(step => (
+            <div 
+              key={step} 
+              className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center font-black text-[10px] transition-all duration-500 ${
+                currentStep >= step 
+                  ? 'bg-white text-indigo-950 shadow-xl scale-110' 
+                  : 'bg-indigo-900 text-indigo-300 border border-white/20'
+              }`}
+            >
+              {step}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="max-w-4xl mx-auto -mt-12 px-4">
-        <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-blue-900/10 overflow-hidden border border-slate-100 p-8 md:p-12">
-
-          {!selectedDoctor ? (
-            <div>
-              <h2 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-4">
-                Select Approved Doctor
-                <div className="h-px flex-1 bg-slate-100"></div>
-              </h2>
-
-              <div className="border border-slate-200 rounded-3xl overflow-hidden mt-8">
-                {isLoadingDoctors ? (
-                  <div className="text-center py-16 bg-slate-50">
-                    <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-xs font-black uppercase text-slate-500 tracking-widest">Loading Doctors...</p>
-                  </div>
-                ) : doctors.length > 0 ? (
-                  doctors.map((doc) => (
-                    <div
-                      key={doc.id}
-                      onClick={() => setSelectedDoctor(doc)}
-                      className="flex items-center justify-between py-4 px-6 border-b border-slate-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-all group gap-4"
-                    >
-                      <div className="flex items-center gap-4 flex-1 overflow-hidden">
-                        <span className="hidden md:block text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[60px]">{doc.id}</span>
-                        <h3 className="text-base font-black text-blue-900 group-hover:text-blue-600 transition-colors whitespace-nowrap truncate">{doc.fullName}</h3>
-                        <p className="hidden md:flex text-sm font-bold text-slate-600 items-center gap-1 whitespace-nowrap">📞 {doc.phone || 'N/A'}</p>
-                      </div>
-                      <div className="flex items-center">
-                        <span className="text-[10px] bg-green-600 text-white px-3 py-1 rounded font-black uppercase tracking-wider whitespace-nowrap shadow-sm">
-                          Select
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-16 opacity-50 bg-slate-50">
-                    <span className="text-4xl block mb-4">🩺</span>
-                    <p className="text-xs font-black uppercase text-slate-500 tracking-widest">No approved doctors found</p>
+        <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-indigo-900/10 overflow-hidden border border-slate-100">
+          <div className="p-8 md:p-12">
+            
+            {/* Step 1: Doctor & Hospital Link */}
+            {currentStep === 1 && (
+              <StepWrapper title="Doctor & Hospital Link">
+                <p className="text-xs text-slate-400 font-bold uppercase mb-6">Link your medical shop to an approved hospital and select a doctor:</p>
+                
+                {/* Premium Active Fetching Loading Indicator */}
+                {(isLoadingDoctors || isLoadingHospitals) && (
+                  <div className="flex items-center justify-center gap-3 p-5 mb-8 bg-indigo-50 border border-indigo-100/60 rounded-3xl animate-pulse">
+                    <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-[10px] font-black text-indigo-950 uppercase tracking-widest">
+                      Fetching approved doctors & hospitals database...
+                    </span>
                   </div>
                 )}
-              </div>
-            </div>
-          ) : isReviewing ? (
-            <div className="space-y-8">
-              <h2 className="text-xl font-black text-slate-800 flex items-center gap-4 mb-8">
-                Review Medical Details
-                <div className="h-px flex-1 bg-slate-100"></div>
-              </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                  <h3 className="font-black text-blue-900 border-b border-slate-200 pb-3 mb-4 text-sm uppercase tracking-wider">Medical Information</h3>
-                  <div className="space-y-3 text-sm">
-                    <DetailRow label="Medical Name" value={medicalName} />
-                    <DetailRow label="WhatsApp" value={whatsappNumber} />
-                    <DetailRow label="Owner Name" value={ownerName} />
-                    <DetailRow label="Email ID" value={email} />
-                    <DetailRow label="Address" value={address} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-indigo-50/40 border border-indigo-100/60 rounded-3xl mb-8">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">
+                      🏥 Link Hospital (Optional) {isLoadingHospitals && <span className="text-indigo-600 animate-pulse font-black">(LOADING...)</span>}
+                    </label>
+                    <select
+                      disabled={isLoadingHospitals}
+                      value={selectedHospitalId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setSelectedHospitalId(id);
+                        const hospObj = hospitals.find(h => h.id === id);
+                        setSelectedHospital(hospObj || null);
+                        // Reset doctor when hospital changes
+                        setSelectedDoctorId('');
+                        setSelectedDoctor(null);
+                      }}
+                      className="w-full bg-white border border-slate-200 p-4 rounded-2xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all cursor-pointer shadow-sm focus:bg-white disabled:bg-slate-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">
+                        {isLoadingHospitals ? "Loading hospitals..." : "-- Direct Doctor Selection (No Hospital) --"}
+                      </option>
+                      {hospitals.map(hosp => (
+                        <option key={hosp.id} value={hosp.id}>
+                          {hosp.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">
+                      **🩺 Select Approved Doctor <span className="text-red-500">*</span>** {isLoadingDoctors && <span className="text-indigo-600 animate-pulse font-black">(LOADING...)</span>}
+                    </label>
+                    <select
+                      required
+                      disabled={isLoadingDoctors}
+                      value={selectedDoctorId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setSelectedDoctorId(id);
+                        const docObj = doctors.find(d => d.id === id);
+                        setSelectedDoctor(docObj || null);
+                      }}
+                      className="w-full bg-white border border-slate-200 p-4 rounded-2xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-600 transition-all cursor-pointer shadow-sm focus:bg-white disabled:bg-slate-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">
+                        {isLoadingDoctors ? "Loading doctors..." : "-- Choose Doctor --"}
+                      </option>
+                      {doctors
+                        .filter(doc => {
+                          if (selectedHospital) {
+                            const docHosp = (doc.associatedHospital || '').toLowerCase().trim();
+                            const targetHospName = (selectedHospital.name || '').toLowerCase().trim();
+                            const targetHospId = (selectedHospital.id || '').toLowerCase().trim();
+                            return docHosp === targetHospName || docHosp === targetHospId;
+                          }
+                          return true;
+                        })
+                        .map(doc => (
+                          <option key={doc.id} value={doc.id}>
+                            {doc.fullName} ({doc.specialization || 'General'})
+                          </option>
+                        ))
+                      }
+                    </select>
                   </div>
                 </div>
+              </StepWrapper>
+            )}
 
-                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                  <h3 className="font-black text-blue-900 border-b border-slate-200 pb-3 mb-4 text-sm uppercase tracking-wider">Legal Details</h3>
-                  <div className="space-y-3 text-sm">
-                    <DetailRow label="License No." value={licenseNumber} />
-                    <DetailRow label="GST No." value={gstNumber} />
-                    <DetailRow label="Reg. Year" value={registrationYear} />
+            {/* Step 2: Medical Shop & Contact Details */}
+            {currentStep === 2 && (
+              <StepWrapper title="Medical Shop & Contact Details">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input 
+                    label="Medical Name" 
+                    placeholder="Enter Medical Name" 
+                    value={medicalName} 
+                    onChange={setMedicalName} 
+                  />
+                  <Input 
+                    label="Owner Name" 
+                    placeholder="Enter Owner Name" 
+                    value={ownerName} 
+                    onChange={setOwnerName} 
+                  />
+                  <Input 
+                    label="Registration Year" 
+                    placeholder="YYYY" 
+                    maxLength="4"
+                    value={registrationYear} 
+                    onChange={v => setRegistrationYear(v.replace(/[^0-9]/g, ''))} 
+                    error={registrationYear && registrationYear.length !== 4 ? 'Registration year must be a 4-digit number' : null}
+                  />
+                  <Input 
+                    label="WhatsApp Number" 
+                    type="tel"
+                    maxLength="10"
+                    placeholder="10-digit WhatsApp No." 
+                    value={whatsappNumber} 
+                    onChange={v => setWhatsappNumber(v.replace(/[^0-9]/g, ''))} 
+                    error={whatsappNumber && whatsappNumber.length !== 10 ? 'WhatsApp number must be 10 digits' : null}
+                  />
+                  <div className="md:col-span-2">
+                    <Input 
+                      label="Email ID" 
+                      type="email"
+                      placeholder="Enter Email Address" 
+                      value={email} 
+                      onChange={setEmail} 
+                      error={email && !email.includes('@') ? 'Invalid email format' : null}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-1">Address</label>
+                    <textarea 
+                      required 
+                      value={address} 
+                      onChange={e => setAddress(e.target.value)} 
+                      placeholder="Full Address of the Medical" 
+                      className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:border-indigo-600 h-28 resize-none transition-all"
+                    />
                   </div>
                 </div>
+              </StepWrapper>
+            )}
 
-                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 md:col-span-2">
-                  <h3 className="font-black text-blue-900 border-b border-slate-200 pb-3 mb-4 text-sm uppercase tracking-wider">Pharmacist & Doctor Link</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <DetailRow label="Pharmacist Name" value={pharmacistName} />
-                    <DetailRow label="Pharmacist Reg No." value={pharmacistRegNumber} />
-                    <DetailRow label="Linked Doctor" value={selectedDoctor.fullName} />
-                    <DetailRow label="Doctor ID" value={selectedDoctor.id} />
-                  </div>
+            {/* Step 3: Licensing, Pharmacist & Types */}
+            {currentStep === 3 && (
+              <StepWrapper title="Licensing, Pharmacist & Types">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                  <Input 
+                    label="License Number" 
+                    placeholder="Enter License Number" 
+                    value={licenseNumber} 
+                    onChange={setLicenseNumber} 
+                  />
+                  <Input 
+                    label="GST Number" 
+                    required={false}
+                    placeholder="GST No. (Optional)" 
+                    value={gstNumber} 
+                    onChange={setGstNumber} 
+                  />
+                  <Input 
+                    label="Registered Pharmacist Name" 
+                    placeholder="Enter Pharmacist Name" 
+                    value={pharmacistName} 
+                    onChange={setPharmacistName} 
+                  />
+                  <Input 
+                    label="Pharmacist Registration Number" 
+                    placeholder="Enter Pharmacist Reg. No." 
+                    value={pharmacistRegNumber} 
+                    onChange={setPharmacistRegNumber} 
+                  />
                 </div>
 
-                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 md:col-span-2">
-                  <h3 className="font-black text-blue-900 border-b border-slate-200 pb-3 mb-4 text-sm uppercase tracking-wider">Medical Types</h3>
-                  <div className="text-sm font-bold text-slate-700 bg-white p-4 rounded-xl border border-slate-200">
-                    {Object.entries(medicalTypes).filter(([_, v]) => v).map(([k]) => typeLabels[k]).join(', ') || 'None Selected'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-8 border-t border-slate-100 flex flex-col sm:flex-row justify-between gap-4">
-                <button type="button" onClick={() => setIsReviewing(false)} className="px-8 py-4 bg-white border-2 border-slate-200 hover:border-slate-400 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-all">
-                  ← Edit Details
-                </button>
-                <button type="button" onClick={handleFinalSubmit} disabled={isSubmitting} className="px-10 py-4 bg-green-600 hover:bg-green-800 disabled:opacity-50 text-white rounded-2xl shadow-xl shadow-green-200 text-xs font-black uppercase tracking-widest transition-all">
-                  {isSubmitting ? 'Submitting...' : 'Confirm & Submit'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={handleReviewSubmit} className="space-y-8">
-              <h2 className="text-xl font-black text-slate-800 flex items-center gap-4 mb-8">
-                Medical Details
-                <div className="h-px flex-1 bg-slate-100"></div>
-              </h2>
-
-              <div className="bg-blue-50 p-4 rounded-xl mb-6 flex justify-between items-center border border-blue-100">
-                <div>
-                  <p className="text-[10px] font-black uppercase text-blue-400 tracking-widest">Selected Doctor</p>
-                  <p className="font-bold text-blue-900">{selectedDoctor.fullName}</p>
-                </div>
-                <button type="button" onClick={() => setSelectedDoctor(null)} className="text-xs font-bold text-blue-600 hover:underline">Change</button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Medical Name <span className="text-red-500">*</span></label>
-                  <input required type="text" value={medicalName} onChange={e => setMedicalName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-600 transition-all" placeholder="Enter Medical Name" />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">WhatsApp Number <span className="text-red-500">*</span></label>
-                  <input required type="tel" maxLength="10" pattern="[0-9]{10}" title="Please enter exactly 10 digits" value={whatsappNumber} onChange={e => setWhatsappNumber(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-600 transition-all" placeholder="10-digit WhatsApp No." />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Address <span className="text-red-500">*</span></label>
-                  <textarea required value={address} onChange={e => setAddress(e.target.value)} rows="3" className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-600 transition-all" placeholder="Full Address of the Medical" />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Type of Medical <span className="text-red-500">*</span></label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {[
-                      { key: 'prescription', label: 'Prescription Medicines (Rx required)' },
-                      { key: 'otc', label: 'Over-the-Counter (OTC)' },
-                      { key: 'generic', label: 'Generic Medicines' },
-                      { key: 'branded', label: 'Branded Medicines' },
-                      { key: 'ayurvedic', label: 'Ayurvedic Medicines (AYUSH)' },
-                      { key: 'homeopathic', label: 'Homeopathic Medicines' },
-                      { key: 'surgical', label: 'Surgical Items (bandages, syringes)' },
-                      { key: 'supplements', label: 'Health Supplements' },
-                      { key: 'babyCare', label: 'Baby Care Products' },
-                      { key: 'personalCare', label: 'Personal Care (skin, hygiene)' },
-                      { key: 'devices', label: 'Medical Devices (BP, glucometer)' }
-                    ].map(type => (
-                      <label key={type.key} className="flex items-start gap-2 cursor-pointer">
-                        <input type="checkbox" checked={medicalTypes[type.key]} onChange={() => handleTypeChange(type.key)} className="w-5 h-5 mt-0.5 rounded text-blue-600 focus:ring-blue-500" />
-                        <span className="text-sm font-bold text-slate-700 leading-tight">{type.label}</span>
+                <p className="text-xs text-slate-400 font-bold uppercase mb-4 ml-1">Select all medicine types and items available at your medical shop (Select At Least One):</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {[
+                    { key: 'prescription', label: 'Prescription Medicines (Rx required)' },
+                    { key: 'otc', label: 'Over-the-Counter (OTC)' },
+                    { key: 'generic', label: 'Generic Medicines' },
+                    { key: 'branded', label: 'Branded Medicines' },
+                    { key: 'ayurvedic', label: 'Ayurvedic Medicines (AYUSH)' },
+                    { key: 'homeopathic', label: 'Homeopathic Medicines' },
+                    { key: 'surgical', label: 'Surgical Items (bandages, syringes)' },
+                    { key: 'supplements', label: 'Health Supplements' },
+                    { key: 'babyCare', label: 'Baby Care Products' },
+                    { key: 'personalCare', label: 'Personal Care (skin, hygiene)' },
+                    { key: 'devices', label: 'Medical Devices (BP, glucometer)' }
+                  ].map(type => {
+                    const isChecked = medicalTypes[type.key];
+                    return (
+                      <label 
+                        key={type.key} 
+                        className={`flex items-start gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                          isChecked 
+                            ? 'border-indigo-600 bg-indigo-50/50' 
+                            : 'border-slate-100 bg-white hover:bg-slate-50'
+                        }`}
+                      >
+                        <input 
+                          type="checkbox" 
+                          checked={isChecked} 
+                          onChange={() => handleTypeChange(type.key)} 
+                          className="w-5 h-5 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500" 
+                        />
+                        <span className="text-xs font-black uppercase text-slate-700 leading-tight">{type.label}</span>
                       </label>
-                    ))}
+                    );
+                  })}
+                </div>
+              </StepWrapper>
+            )}
+
+            {/* Step 4: Review & Submit */}
+            {currentStep === 4 && (
+              <StepWrapper title="Review Medical Details">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <h3 className="font-black text-indigo-900 border-b border-slate-200 pb-3 mb-4 text-sm uppercase tracking-wider">Medical Information</h3>
+                    <div className="space-y-3 text-sm">
+                      <DetailRow label="Medical Name" value={medicalName} />
+                      <DetailRow label="WhatsApp" value={whatsappNumber} />
+                      <DetailRow label="Owner Name" value={ownerName} />
+                      <DetailRow label="Email ID" value={email} />
+                      <DetailRow label="Address" value={address} />
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <h3 className="font-black text-indigo-900 border-b border-slate-200 pb-3 mb-4 text-sm uppercase tracking-wider">Legal Details</h3>
+                    <div className="space-y-3 text-sm">
+                      <DetailRow label="License No." value={licenseNumber} />
+                      <DetailRow label="GST No." value={gstNumber} />
+                      <DetailRow label="Reg. Year" value={registrationYear} />
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 md:col-span-2">
+                    <h3 className="font-black text-indigo-900 border-b border-slate-200 pb-3 mb-4 text-sm uppercase tracking-wider">Pharmacist & Doctor Link</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <DetailRow label="Pharmacist Name" value={pharmacistName} />
+                      <DetailRow label="Pharmacist Reg No." value={pharmacistRegNumber} />
+                      <DetailRow label="Linked Doctor" value={selectedDoctor?.fullName} />
+                      <DetailRow label="Doctor ID" value={selectedDoctor?.id} />
+                      <DetailRow label="Doctor's Hospital" value={selectedDoctor?.associatedHospital || 'None Selected'} />
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 md:col-span-2">
+                    <h3 className="font-black text-indigo-900 border-b border-slate-200 pb-3 mb-4 text-sm uppercase tracking-wider">Medical Types</h3>
+                    <div className="text-sm font-bold text-slate-700 bg-white p-4 rounded-xl border border-slate-200">
+                      {Object.entries(medicalTypes).filter(([_, v]) => v).map(([k]) => typeLabels[k]).join(', ') || 'None Selected'}
+                    </div>
                   </div>
                 </div>
+              </StepWrapper>
+            )}
 
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">License Number <span className="text-red-500">*</span></label>
-                  <input required type="text" value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-600 transition-all" placeholder="License No." />
-                </div>
+          </div>
 
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">GST Number</label>
-                  <input type="text" value={gstNumber} onChange={e => setGstNumber(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-600 transition-all" placeholder="GST No. (Optional)" />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Owner Name <span className="text-red-500">*</span></label>
-                  <input required type="text" value={ownerName} onChange={e => setOwnerName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-600 transition-all" placeholder="Owner Name" />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Email ID <span className="text-red-500">*</span></label>
-                  <input required type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-600 transition-all" placeholder="Email Address" />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Registered Pharmacist Name <span className="text-red-500">*</span></label>
-                  <input required type="text" value={pharmacistName} onChange={e => setPharmacistName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-600 transition-all" placeholder="Pharmacist Name" />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Pharmacist Registration Number <span className="text-red-500">*</span></label>
-                  <input required type="text" value={pharmacistRegNumber} onChange={e => setPharmacistRegNumber(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-600 transition-all" placeholder="Pharmacist Reg. No." />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Registration Year <span className="text-red-500">*</span></label>
-                  <input required type="text" value={registrationYear} onChange={e => setRegistrationYear(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-600 transition-all" placeholder="YYYY" />
-                </div>
-              </div>
-
-              <div className="pt-8 border-t border-slate-100 flex justify-end">
-                <button type="submit" className="px-10 py-4 bg-blue-600 hover:bg-blue-800 text-white rounded-2xl shadow-xl shadow-blue-200 text-xs font-black uppercase tracking-widest transition-all">
-                  Review Details →
-                </button>
-              </div>
-            </form>
-          )}
+          {/* Navigation Controls */}
+          <div className="bg-slate-50 p-6 flex justify-between items-center border-t border-slate-100">
+            <button 
+              type="button" 
+              onClick={prevStep} 
+              disabled={currentStep === 1} 
+              className={`px-8 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${
+                currentStep === 1 ? 'opacity-0' : 'text-slate-400 hover:text-indigo-600'
+              }`}
+            >
+              ← Back
+            </button>
+            {currentStep < 4 ? (
+              <button
+                type="button"
+                onClick={nextStep}
+                disabled={!isStepValid(currentStep)}
+                className={`border-2 px-10 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  !isStepValid(currentStep) 
+                    ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' 
+                    : 'bg-white border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white'
+                }`}
+              >
+                Next Step →
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleFinalSubmit}
+                disabled={isSubmitting}
+                className="px-10 py-3 bg-indigo-600 hover:bg-indigo-800 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl shadow-indigo-200"
+              >
+                {isSubmitting ? 'Submitting...' : 'Confirm & Submit'}
+              </button>
+            )}
+          </div>
 
         </div>
       </div>
@@ -376,7 +626,69 @@ const MedicalForm = ({ onSubmitSuccess }) => {
   );
 };
 
-// Helper Components
+/* --- HELPERS --- */
+const StepWrapper = ({ title, children }) => (
+  <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+    <h2 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-4">
+      {title}
+      <div className="h-px flex-1 bg-slate-100"></div>
+    </h2>
+    {children}
+  </div>
+);
+
+const Input = ({ label, value, onChange, type = "text", pattern, maxLength, minLength, min, max, placeholder, required = true, error }) => {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === "password";
+  const currentType = isPassword ? (showPassword ? "text" : "password") : type;
+
+  return (
+    <div className="flex flex-col relative">
+      <label className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">
+        {label} {!required && <span className="text-slate-300 normal-case tracking-normal ml-1">(Optional)</span>}
+      </label>
+      <div className="relative">
+        <input 
+          required={required} 
+          type={currentType} 
+          value={value} 
+          onChange={e => onChange(e.target.value)} 
+          pattern={pattern} 
+          maxLength={maxLength} 
+          minLength={minLength} 
+          min={min} 
+          max={max} 
+          placeholder={placeholder} 
+          className={`w-full bg-slate-50 border ${
+            error ? 'border-red-400 focus:border-red-500' : 'border-slate-200 focus:border-indigo-600'
+          } p-4 rounded-2xl text-sm font-bold outline-none focus:bg-white transition-all ${
+            isPassword ? 'pr-12' : ''
+          }`} 
+        />
+        {isPassword && (
+          <button 
+            type="button" 
+            onClick={() => setShowPassword(!showPassword)} 
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none transition-colors"
+          >
+            {showPassword ? (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            )}
+          </button>
+        )}
+      </div>
+      {error && <span className="text-[10px] text-red-500 font-bold ml-1 mt-1 uppercase tracking-wider">✗ {error}</span>}
+    </div>
+  );
+};
+
 const DetailRow = ({ label, value }) => {
   return (
     <div className="flex justify-between border-b border-slate-200/50 pb-1 last:border-0 items-center">

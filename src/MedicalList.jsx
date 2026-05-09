@@ -42,6 +42,7 @@ const MedicalList = ({ submissions, onAction }) => {
             status: item.status || 'Pending',
             doctorId: item.doctorId || item.doctor_id,
             doctorName: item.doctorName || item.doctor_name,
+            doctorHospital: item.doctorHospital || item.doctor_hospital || item.doctorAssociatedHospital || 'None Selected',
             medical: {
               medicalName: m.medicalName || m.medical_name || item.medicalName || item.medical_name || item.name || 'N/A',
               whatsappNumber: m.whatsappNumber || m.whatsapp_number || item.whatsappNumber || item.phone || item.whatsapp_number || 'N/A',
@@ -286,6 +287,7 @@ const MedicalList = ({ submissions, onAction }) => {
                       <DetailRow label="Pharmacist Reg No." value={selectedForm.medical?.pharmacistRegNumber} />
                       <DetailRow label="Linked Doctor" value={selectedForm.doctorName} />
                       <DetailRow label="Doctor ID" value={selectedForm.doctorId} />
+                      <DetailRow label="Doctor's Hospital" value={selectedForm.doctorHospital || 'None Selected'} />
                       <div className="md:col-span-2 mt-2">
                         <DetailRow label="Address" value={selectedForm.medical?.address} />
                       </div>
